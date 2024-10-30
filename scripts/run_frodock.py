@@ -47,7 +47,7 @@ def run_frodock(receptor_file, ligand_file, dat_files_name, dat_dir, np, workdir
     suff2 = comp
 
     if mpi == "_mpi":
-        run = [mympi, "-np", str(np)]
+        run = [mympi, "-np", str(np), "--allow-run-as-root"]
         print("RUNNING MPI TESTS")
     else:
         run = []
