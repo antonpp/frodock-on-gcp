@@ -1,7 +1,20 @@
+import yaml
+import argparse
+import time
+import hashlib
+from pathlib import Path
+import os
+
+
+
+def generate_frodock_yaml(receptor_file, ligand_file, data_files_name, data_files_dir, npi_setting, work_dir):
+    """Generates a YAML Kubernetes spec file for a Frodock job."""
+
+    base_template = """
 apiVersion: run.googleapis.com/v1
 kind: Job
 metadata:
-  name: my-frodock-job-1738942414_92069bc9
+  name: my-frodock-job-{data_files_name}
 spec:
   template:
     metadata:
@@ -18,12 +31,12 @@ spec:
           - args:
             - python3
             - /data/frodock_mount/scripts/run_frodock.py
-            - /data/frodock_mount/TestDataset/4DEF-Test2/4DEF_r_u_ASA.pdb
-            - /data/frodock_mount/TestDataset/4DEF-Test2/4DEF_l_u_ASA.pdb
-            - 1738942414_92069bc9
-            - /data/frodock_mount/output_1738942414_92069bc9/
-            - 4
-            - /data/frodock_mount/workdir_1738942414_92069bc9/
+            - {receptor_file}
+            - {ligand_file}
+            - {data_files_name}
+            - {data_files_dir}
+            - {npi_setting}
+            - {work_dir}
             image: antonpopovine/frodock-mpi
             name: my-frodock-job-1
             resources:
@@ -41,3 +54,76 @@ spec:
               volumeAttributes:
                 bucketName: gke-dja-demo_static_assets
             name: gcs-mount
+    """
+
+    yaml_data = yaml.safe_load(base_template.format(
+        receptor_file=receptor_file,
+        ligand_file=ligand_file,
+        data_files_name=data_files_name,
+        data_files_dir=data_files_dir,
+        npi_setting=npi_setting,
+        work_dir=work_dir
+    ))
+
+    yaml_string = yaml.dump(yaml_data, default_flow_style=False)
+    return yaml_string
+
+
+def write_yaml_to_file(yaml_string, receptor_file, data_files_name):
+    """Writes the YAML string to a file with a timestamp and hash in the name,
+       using the receptor file path as a base.
+    """
+
+
+    base_filename = os.path.basename(receptor_file)
+    base_name_without_ext = os.path.splitext(base_filename)[0]
+
+    filename = f"{base_name_without_ext}_{data_files_name}.yaml"
+    filepath = Path(filename)
+
+    try:
+        with filepath.open("w") as f:
+            f.write(yaml_string)
+        print(f"YAML written to {filename}")
+        return filepath
+    except Exception as e:
+        print(f"Error writing to file: {e}")
+        return None
+
+
+if __name__ == "__main__":
+
+    # Sample input tuples (receptor, ligand)
+    input_tuples = [
+        ("/data/frodock_mount/TestDataset/1WEJ-Test2/1WEJ_r_u_ASA.pdb", "/data/frodock_mount/TestDataset/1WEJ-Test2/1WEJ_l_u_ASA.pdb"),
+        ("/data/frodock_mount/TestDataset/2XYZ-Test2/2XYZ_r_u_ASA.pdb", "/data/frodock_mount/TestDataset/2XYZ-Test2/2XYZ_l_u_ASA.pdb"),
+        ("/data/frodock_mount/TestDataset/3ABC-Test2/3ABC_r_u_ASA.pdb", "/data/frodock_mount/TestDataset/3ABC-Test2/3ABC_l_u_ASA.pdb"),
+        ("/data/frodock_mount/TestDataset/4DEF-Test2/4DEF_r_u_ASA.pdb", "/data/frodock_mount/TestDataset/4DEF-Test2/4DEF_l_u_ASA.pdb"),
+        ("/data/frodock_mount/TestDataset/5GHI-Test2/5GHI_r_u_ASA.pdb", "/data/frodock_mount/TestDataset/5GHI-Test2/5GHI_l_u_ASA.pdb"),
+        ("/data/frodock_mount/TestDataset/6JKL-Test2/6JKL_r_u_ASA.pdb", "/data/frodock_mount/TestDataset/6JKL-Test2/6JKL_l_u_ASA.pdb"),
+        ("/data/frodock_mount/TestDataset/7MNO-Test2/7MNO_r_u_ASA.pdb", "/data/frodock_mount/TestDataset/7MNO-Test2/7MNO_l_u_ASA.pdb"),
+        ("/data/frodock_mount/TestDataset/8PQR-Test2/8PQR_r_u_ASA.pdb", "/data/frodock_mount/TestDataset/8PQR-Test2/8PQR_l_u_ASA.pdb"),
+        ("/data/frodock_mount/TestDataset/9STU-Test2/9STU_r_u_ASA.pdb", "/data/frodock_mount/TestDataset/9STU-Test2/9STU_l_u_ASA.pdb"),
+        ("/data/frodock_mount/TestDataset/0VWX-Test2/0VWX_r_u_ASA.pdb", "/data/frodock_mount/TestDataset/0VWX-Test2/0VWX_l_u_ASA.pdb"),
+    ]
+
+    npi_setting = 4  # Set npi_setting to 4
+
+
+    for receptor_file, ligand_file in input_tuples:
+
+        timestamp = int(time.time())
+        # Include receptor_file in the hashing to ensure uniqueness
+        hash_str = hashlib.sha256((str(timestamp) + receptor_file).encode()).hexdigest()[:8]
+
+        data_files_name = f"{timestamp}_{hash_str}"
+        work_dir = f'/data/frodock_mount/workdir_{data_files_name}/' # Use combined name in path
+        data_files_dir = f'/data/frodock_mount/output_{data_files_name}/' # Use combined name in path
+        npi_setting = 4  # Set npi_setting to 4
+
+        yaml_spec = generate_frodock_yaml(receptor_file, ligand_file, data_files_name, data_files_dir, npi_setting, work_dir)
+        filepath = write_yaml_to_file(yaml_spec, receptor_file, data_files_name)
+        if filepath:
+            print(f"File saved to: {filepath}")
+        else:
+            print("Failed to save the file.")
