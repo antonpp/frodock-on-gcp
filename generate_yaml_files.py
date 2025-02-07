@@ -14,7 +14,7 @@ def generate_frodock_yaml(receptor_file, ligand_file, data_files_name, data_file
 apiVersion: run.googleapis.com/v1
 kind: Job
 metadata:
-  name: my-frodock-job
+  name: my-frodock-job-{data_files_name}
 spec:
   template:
     metadata:
@@ -111,13 +111,18 @@ if __name__ == "__main__":
 
     npi_setting = 4  # Set npi_setting to 4
 
-    for receptor_file, ligand_file in input_tuples:
-        timestamp = int(time.time())
-        hash_str = hashlib.sha256(str(timestamp).encode()).hexdigest()[:8]  # Short hash
 
-        data_files_name = f"{hash_str}"
-        work_dir = f'/data/frodock_mount/workdir_{hash_str}/'
-        data_files_dir = f'/data/frodock_mount/output_{hash_str}/'
+    for receptor_file, ligand_file in input_tuples:
+
+        timestamp = int(time.time())
+        short_timestamp = str(timestamp)[:8]
+        # Include receptor_file in the hashing to ensure uniqueness
+        hash_str = hashlib.sha256((str(timestamp) + receptor_file).encode()).hexdigest()[:8]
+
+        data_files_name = f"{short_timestamp}_{hash_str}"
+        work_dir = f'/data/frodock_mount/workdir_{data_files_name}/' # Use combined name in path
+        data_files_dir = f'/data/frodock_mount/output_{data_files_name}/' # Use combined name in path
+        npi_setting = 4  # Set npi_setting to 4
 
         yaml_spec = generate_frodock_yaml(receptor_file, ligand_file, data_files_name, data_files_dir, npi_setting, work_dir)
         filepath = write_yaml_to_file(yaml_spec, receptor_file)
